@@ -30,9 +30,7 @@ class MainActivity : ComponentActivity() {
 
 
         val channel = NotificationChannel(
-            "RemoteControl",
-            "Phone being remote controlled",
-            NotificationManager.IMPORTANCE_HIGH
+            "RemoteControl", "Phone being remote controlled", NotificationManager.IMPORTANCE_HIGH
         )
 
         val notificationManager =
@@ -47,25 +45,18 @@ class MainActivity : ComponentActivity() {
 
         val button1: Button = findViewById(R.id.button1)
         val button2: Button = findViewById(R.id.button2)
-        val button3: Button = findViewById(R.id.button3)
 
         button1.setOnClickListener {
-            val serviceIntent = Intent(applicationContext, RunningService::class.java)
+            val serviceIntent = Intent(this, RunningService::class.java)
             serviceIntent.action = RunningService.ACTION_START
-            applicationContext.startService(serviceIntent)
+            this.startService(serviceIntent)
         }
         button2.setOnClickListener {
-            val serviceIntent = Intent(applicationContext, RunningService::class.java)
+            val serviceIntent = Intent(this, RunningService::class.java)
             serviceIntent.action = RunningService.ACTION_STOP
-            applicationContext.startService(serviceIntent)
+            this.startService(serviceIntent)
         }
-        button3.setOnClickListener {
-            val displayMetrics = DisplayMetrics()
-            windowManager.defaultDisplay.getRealMetrics(displayMetrics)
-            println(displayMetrics.heightPixels)
 
-
-        }
 
 
     }

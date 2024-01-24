@@ -26,9 +26,10 @@ class RunningService : Service() {
     private var running = false
     private lateinit var wakeLock: WakeLock
     private lateinit var webSocketManager: WebSocketManager
-    private var screenHeight: Int = 0;
-    private var screenWidth: Int = 0;
-
+    private var screenHeight: Int = 0
+    private var screenWidth: Int = 0
+    private var serviceRunning = false
+    private var mySid = ""
 
     companion object {
         private const val CHANNEL_ID = "RemoteControl"
@@ -40,9 +41,11 @@ class RunningService : Service() {
         return null
     }
 
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i("REMOTE CONTROL", "started service remote control")
-        if (intent?.action.toString() == ACTION_START) {
+        if (intent?.action.toString() == ACTION_START && !serviceRunning) {
+            serviceRunning = true
             val (width, height) = getScreenResolution()
             screenWidth = width
             screenHeight = height
@@ -50,12 +53,13 @@ class RunningService : Service() {
             startForegroundService()
         } else {
             stopSelf()
+            serviceRunning = false
         }
         return START_STICKY
     }
 
     private fun startForegroundService() {
-        webSocketManager = WebSocketManager()
+        webSocketManager = WebSocketManager(this)
         webSocketManager.connect()
 
         webSocketManager.setIncomingMessageListener { message ->
@@ -85,6 +89,12 @@ class RunningService : Service() {
                 volumeUp()
             } else if (map["data"] == "volumeDown") {
                 volumeDown()
+            }
+        }
+
+        webSocketManager.on("getsid") { args ->
+            if (args.isNotEmpty()) {
+                mySid = args[1].toString()
             }
         }
 
@@ -182,6 +192,7 @@ class RunningService : Service() {
         val os = sh.outputStream
         os.write("/system/bin/screencap -p\n".toByteArray(charset("ASCII")))
         os.flush()
+
         val `is` = sh.inputStream
         screenshot = BitmapFactory.decodeStream(`is`)
         return screenshot
@@ -211,7 +222,14 @@ class RunningService : Service() {
         running = false
 
         try {
+            socket?.disconnect()
+
+        } catch (e: Exception) {
+            Log.e("REMOTE CONTROL", "Socket disconnect error: $e")
+        }
+        try {
             socket?.close()
+
         } catch (e: Exception) {
             Log.e("REMOTE CONTROL", "Socket close error: $e")
         }

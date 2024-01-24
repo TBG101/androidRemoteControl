@@ -1,23 +1,28 @@
 package zied.harzallah.controlandroid
 
+import android.content.Context
 import android.graphics.Bitmap
-import java.io.ByteArrayOutputStream
 import android.util.Base64
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
+import java.io.ByteArrayOutputStream
 
 
-class WebSocketManager {
+class WebSocketManager(private val context: Context) {
 
     private var mSocket: Socket? = null
-    private val jwtToken = "q5xntmuiWMv9grUz00848W7f4la5SPQjJ37gKqYH"
-
+    private var tokenManager = SharedPreferencesHelper()
 
     init {
+        var jwtToken = tokenManager.getToken(context)
         try {
-            val options = IO.Options.builder().setExtraHeaders(
-                    mapOf("Authorization" to listOf("Bearer $jwtToken"))
+            val options = IO.Options
+
+                .builder().setExtraHeaders(
+                    mapOf(
+                        "Authorization" to listOf("Bearer $jwtToken"), "hardware" to listOf("phone")
+                    )
                 ).build()
 
             mSocket = IO.socket("ws://192.168.1.13:5000/", options)
@@ -28,14 +33,11 @@ class WebSocketManager {
 
     fun connect() {
         try {
-
-            mSocket?.connect()
+            if (!mSocket!!.connected()) mSocket?.connect()
         } catch (e: Exception) {
-            println("execptiçon")
+            println("exception")
         }
-        mSocket?.on(Socket.EVENT_CONNECT) {
-            emit("message", "Phone Connected")
-        }
+
 
     }
 
@@ -60,7 +62,6 @@ class WebSocketManager {
         mSocket?.on(event, listener)
     }
 
-
     fun setIncomingMessageListener(listener: (String) -> Unit) {
         on("message", Emitter.Listener { args ->
             if (args.isNotEmpty()) {
@@ -69,4 +70,6 @@ class WebSocketManager {
             }
         })
     }
+
+
 }
