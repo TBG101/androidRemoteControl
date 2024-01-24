@@ -30,6 +30,7 @@ class RunningService : Service() {
     private var screenWidth: Int = 0
     private var serviceRunning = false
     private var mySid = ""
+    private var targetSid = ""
 
     companion object {
         private const val CHANNEL_ID = "RemoteControl"
@@ -97,10 +98,19 @@ class RunningService : Service() {
                 mySid = args[1].toString()
             }
         }
+        webSocketManager.on("createconnection") { args ->
+            if (args.isNotEmpty()) {
+                val message = args[0].toString()
+                val map = Json.decodeFromString<Map<String, String>>(message)
+                targetSid = map["mysid"]
+            }
+        }
+
 
         val notification = createNotification()
         startForeground(1, notification)
     }
+
 
     private fun volumeDown() {
         Runtime.getRuntime().exec(arrayOf("su", "-c", "input keyevent 25"))
@@ -209,7 +219,10 @@ class RunningService : Service() {
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
                     val imageBytes = baos.toByteArray()
                     val base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
-                    webSocketManager.emit("image_event", base64Image)
+                    webSocketManager.emit("image_event", {
+                        "image":base64Image,
+                        "target":targersid
+                    })
                 } else {
                     Log.e("REMOTE CONTROL", "ERROR")
 

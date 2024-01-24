@@ -14,6 +14,7 @@ class WebSocketManager(private val context: Context) {
     private var mSocket: Socket? = null
     private var tokenManager = SharedPreferencesHelper()
 
+
     init {
         var jwtToken = tokenManager.getToken(context)
         try {
