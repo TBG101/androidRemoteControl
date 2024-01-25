@@ -7,12 +7,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager.WakeLock
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import android.view.WindowMetrics
 import androidx.core.app.NotificationCompat
+import com.google.gson.Gson
 import io.socket.engineio.parser.Base64
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -24,7 +24,6 @@ import kotlin.concurrent.thread
 class RunningService : Service() {
     private var socket: DatagramSocket? = null
     private var running = false
-    private lateinit var wakeLock: WakeLock
     private lateinit var webSocketManager: WebSocketManager
     private var screenHeight: Int = 0
     private var screenWidth: Int = 0
@@ -62,7 +61,6 @@ class RunningService : Service() {
     private fun startForegroundService() {
         webSocketManager = WebSocketManager(this)
         webSocketManager.connect()
-
         webSocketManager.setIncomingMessageListener { message ->
             Log.i("REMOTE CONTROL", "Received message: $message")
 
@@ -72,14 +70,12 @@ class RunningService : Service() {
                 Log.i("REMOTE CONTROL", "capturing")
                 try {
                     running = true
-
                     sendScreenshot()
-
                 } catch (e: Exception) {
-                    Log.e("REMOTE CONTROL", "capture errpr")
+                    Log.e("REMOTE CONTROL", "capture error")
                 }
             } else if (map["data"] == "stop capture") {
-                running = false;
+                running = false
             } else if (map["data"] == "tap") {
                 tap(map["x"], map["y"])
             } else if (map["data"] == "swipe") {
@@ -96,13 +92,16 @@ class RunningService : Service() {
         webSocketManager.on("getsid") { args ->
             if (args.isNotEmpty()) {
                 mySid = args[1].toString()
+                println("my sid is $mySid")
             }
         }
         webSocketManager.on("createconnection") { args ->
             if (args.isNotEmpty()) {
-                val message = args[0].toString()
-                val map = Json.decodeFromString<Map<String, String>>(message)
-                targetSid = map["mysid"]
+                targetSid = args[0].toString()
+                println("my sid is $targetSid")
+            }
+            if (targetSid.isEmpty()) {
+                running = false
             }
         }
 
@@ -181,9 +180,9 @@ class RunningService : Service() {
 
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val display = this.display
-            display?.getRealMetrics(displayMetrics)
+            @Suppress("DEPRECATION") display?.getRealMetrics(displayMetrics)
         } else {
-            windowManager.defaultDisplay.getRealMetrics(displayMetrics)
+            @Suppress("DEPRECATION") windowManager.defaultDisplay.getRealMetrics(displayMetrics)
         }
         return Pair(displayMetrics.widthPixels, displayMetrics.heightPixels)
     }
@@ -197,35 +196,38 @@ class RunningService : Service() {
     }
 
     private fun takeScreenshot(): Bitmap? {
-        var screenshot: Bitmap? = null
         val sh = Runtime.getRuntime().exec("su", null, null)
         val os = sh.outputStream
         os.write("/system/bin/screencap -p\n".toByteArray(charset("ASCII")))
         os.flush()
-
-        val `is` = sh.inputStream
-        screenshot = BitmapFactory.decodeStream(`is`)
-        return screenshot
+        return BitmapFactory.decodeStream(sh.inputStream)
     }
 
     private fun sendScreenshot() {
         Log.i("REMOTE CONTROL", "saving")
         // check if this works without the thread
         thread(start = true) {
-            while (running) {
-                var bitmap = takeScreenshot()
+            while (running && targetSid.isNotEmpty()) {
+                val bitmap = takeScreenshot()
                 if (bitmap != null && running) {
                     val baos = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 50, baos)
+                    } else {
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos)
+                    }
                     val imageBytes = baos.toByteArray()
                     val base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
-                    webSocketManager.emit("image_event", {
-                        "image":base64Image,
-                        "target":targersid
-                    })
+                    webSocketManager.emit(
+                        "image_event", Gson().toJson(
+                            mapOf(
+                                "target" to targetSid, "image" to base64Image
+                            )
+                        )
+                    )
+
                 } else {
                     Log.e("REMOTE CONTROL", "ERROR")
-
                 }
             }
         }
@@ -247,11 +249,6 @@ class RunningService : Service() {
             Log.e("REMOTE CONTROL", "Socket close error: $e")
         }
 
-        try {
-            wakeLock?.release()
-        } catch (e: Exception) {
-            Log.e("REMOTE CONTROL", "wakelock close error: $e")
-        }
         super.onDestroy()
     }
 

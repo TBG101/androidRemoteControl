@@ -4,31 +4,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.util.DisplayMetrics
-import android.view.WindowManager
-import android.view.WindowMetrics
 import android.widget.Button
-import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.annotation.RequiresApi
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.logging.HttpLoggingInterceptor
-import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
-
-
         val channel = NotificationChannel(
             "RemoteControl", "Phone being remote controlled", NotificationManager.IMPORTANCE_HIGH
         )
@@ -38,6 +21,9 @@ class MainActivity : ComponentActivity() {
         notificationManager.createNotificationChannel(channel)
 
 
+        val serviceIntent = Intent(this, RunningService::class.java)
+        serviceIntent.action = RunningService.ACTION_START
+        this.startService(serviceIntent)
 
         setContentView(
             R.layout.activity_main
@@ -56,8 +42,6 @@ class MainActivity : ComponentActivity() {
             serviceIntent.action = RunningService.ACTION_STOP
             this.startService(serviceIntent)
         }
-
-
 
     }
 }

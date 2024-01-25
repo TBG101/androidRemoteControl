@@ -3,6 +3,7 @@ package zied.harzallah.controlandroid
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
+import android.util.Log
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
@@ -18,13 +19,11 @@ class WebSocketManager(private val context: Context) {
     init {
         var jwtToken = tokenManager.getToken(context)
         try {
-            val options = IO.Options
-
-                .builder().setExtraHeaders(
-                    mapOf(
-                        "Authorization" to listOf("Bearer $jwtToken"), "hardware" to listOf("phone")
-                    )
-                ).build()
+            val options = IO.Options.builder().setExtraHeaders(
+                mapOf(
+                    "Authorization" to listOf("Bearer $jwtToken"), "hardware" to listOf("phone")
+                )
+            ).setTransports(arrayOf("websocket")).build()
 
             mSocket = IO.socket("ws://192.168.1.13:5000/", options)
         } catch (e: Exception) {
@@ -32,9 +31,13 @@ class WebSocketManager(private val context: Context) {
         }
     }
 
+
     fun connect() {
         try {
-            if (!mSocket!!.connected()) mSocket?.connect()
+            if (mSocket?.connected() != true) {
+                mSocket?.connect()
+                println("connection establised")
+            }
         } catch (e: Exception) {
             println("exception")
         }
@@ -43,7 +46,14 @@ class WebSocketManager(private val context: Context) {
     }
 
     fun disconnect() {
-        mSocket?.disconnect()
+        try {
+            mSocket?.disconnect()
+            mSocket?.close()
+
+
+        } catch (e: Exception) {
+            Log.e("REMOTE CONTROL", " exception on disconnect $e")
+        }
     }
 
     fun sendImage(bitmap: Bitmap) {
