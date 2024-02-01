@@ -17,43 +17,45 @@ import io.socket.engineio.parser.Base64
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
-import java.net.DatagramSocket
+
 import kotlin.concurrent.thread
 
 
 class RunningService : Service() {
-    private var socket: DatagramSocket? = null
+    private var serviceRunning = false
     private var running = false
     private lateinit var webSocketManager: WebSocketManager
     private var screenHeight: Int = 0
     private var screenWidth: Int = 0
-    private var serviceRunning = false
     private var mySid = ""
     private var targetSid = ""
 
     companion object {
         private const val CHANNEL_ID = "RemoteControl"
-        const val ACTION_START = "com.example.ACTION_START"
-        const val ACTION_STOP = "com.example.ACTION_STOP"
+        const val ACTION_START = "ACTION_START"
+        const val ACTION_STOP = "ACTION_STOP"
     }
 
     override fun onBind(p0: Intent?): IBinder? {
         return null
     }
 
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i("REMOTE CONTROL", "started service remote control")
+
         if (intent?.action.toString() == ACTION_START && !serviceRunning) {
+            Log.i("REMOTE CONTROL", "started service remote control")
             serviceRunning = true
             val (width, height) = getScreenResolution()
             screenWidth = width
             screenHeight = height
-            println(screenHeight)
             startForegroundService()
+
         } else {
-            stopSelf()
-            serviceRunning = false
+            try {
+                stopSelf()
+            } catch (e: Exception) {
+                Log.e("REMOTE CONTROL", "Error on closing socket  $e")
+            }
         }
         return START_STICKY
     }
@@ -79,7 +81,10 @@ class RunningService : Service() {
             } else if (map["data"] == "tap") {
                 tap(map["x"], map["y"])
             } else if (map["data"] == "swipe") {
-                swipe(map["x1"], map["y1"], map["x2"], map["y2"])
+                val cor = Json.decodeFromString<List<List<Double>>>(map["coordinates"]!!)
+                thread(start = true) {
+                    swipe(cor)
+                }
             } else if (map["data"] == "lock") {
                 lockBTN()
             } else if (map["data"] == "volumeUp") {
@@ -110,7 +115,6 @@ class RunningService : Service() {
         startForeground(1, notification)
     }
 
-
     private fun volumeDown() {
         Runtime.getRuntime().exec(arrayOf("su", "-c", "input keyevent 25"))
     }
@@ -138,33 +142,82 @@ class RunningService : Service() {
             val cmd = arrayOf(
                 "su", "-c", "input tap $realX $readY"
             )
-            val p = Runtime.getRuntime().exec(cmd)
-            p.waitFor()
+            Runtime.getRuntime().exec(cmd)
         } catch (e: java.lang.Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun swipe(x1: String?, y1: String?, x2: String?, y2: String?) {
-        if (x1 == null || y1 == null || x2 == null || y2 == null) return
-
-        try {
-            println("Performing swipe function")
-            val realX = (x1.toDouble() / 100) * screenWidth
-            val readY = (y1.toDouble() / 100) * screenHeight
-            val realX2 = (x2.toDouble() / 100) * screenWidth
-            val readY2 = (y2.toDouble() / 100) * screenHeight
-
-            Log.i("REMOTE CONTROL", "$realX $readY $realX2 $readY2")
-            val cmd = arrayOf(
-                "su", "-c", "input swipe $realX $readY $realX2 $readY2"
-            )
-
-            val p = Runtime.getRuntime().exec(cmd)
-            p.waitFor()
-        } catch (e: java.lang.Exception) {
-            e.printStackTrace()
+    private fun swipe(cor: List<List<Double>>) {
+        if (cor.size == 2) {
+            val realX = (cor[0][0] / 100) * screenWidth
+            val realY = (cor[0][1] / 100) * screenHeight
+            val realX1 = (cor[1][0] / 100) * screenWidth
+            val realY1 = (cor[1][1] / 100) * screenHeight
+            simpleSwipe(realX, realY, realX1, realY1)
+            return
         }
+
+        for (i in 0 until cor.size) {
+            println(cor[i])
+            val realX = (cor[i][0] / 100) * screenWidth
+            val readY = (cor[i][1] / 100) * screenHeight
+            when (i) {
+                (0) -> {
+                    fingerDown(realX, readY)
+                }
+
+                (cor.size - 1) -> {
+                    fingerUp(realX, readY)
+                }
+
+                else -> {
+                    fingerMove(realX, readY)
+                }
+            }
+        }
+
+
+    }
+
+    private fun fingerDown(x: Double, y: Double) {
+        val cmd = arrayOf(
+            "su", "-c", "input motionevent DOWN $x $y"
+        )
+        Runtime.getRuntime().exec(cmd).waitFor()
+
+        Runtime.getRuntime().exec(
+            arrayOf(
+                "su", "-c", "input motionevent MOVE ${x + 1} ${y + 1}"
+            )
+        ).waitFor()
+    }
+
+    private fun fingerMove(x: Double, y: Double) {
+        val cmd = arrayOf(
+            "su", "-c", "input motionevent MOVE $x $y"
+        )
+        Runtime.getRuntime().exec(cmd).waitFor()
+    }
+
+    private fun fingerUp(x: Double, y: Double) {
+
+        Runtime.getRuntime().exec(
+            arrayOf(
+                "su", "-c", "input motionevent MOVE $x $y"
+            )
+        ).waitFor()
+        val cmd = arrayOf(
+            "su", "-c", "input motionevent UP $x $y"
+        )
+        Runtime.getRuntime().exec(cmd).waitFor()
+    }
+
+    private fun simpleSwipe(x: Double, y: Double, x1: Double, x2: Double) {
+        val cmd = arrayOf(
+            "su", "-c", "input swipe $x $y $x1 $x2"
+        )
+        Runtime.getRuntime().exec(cmd).waitFor()
     }
 
     private fun getScreenResolution(): Pair<Int, Int> {
@@ -205,7 +258,6 @@ class RunningService : Service() {
 
     private fun sendScreenshot() {
         Log.i("REMOTE CONTROL", "saving")
-        // check if this works without the thread
         thread(start = true) {
             while (running && targetSid.isNotEmpty()) {
                 val bitmap = takeScreenshot()
@@ -225,9 +277,8 @@ class RunningService : Service() {
                             )
                         )
                     )
-
                 } else {
-                    Log.e("REMOTE CONTROL", "ERROR")
+                    Log.i("REMOTE CONTROL", "Stopped running")
                 }
             }
         }
@@ -235,21 +286,15 @@ class RunningService : Service() {
 
     override fun onDestroy() {
         running = false
-
+        serviceRunning = false
         try {
-            socket?.disconnect()
-
+            webSocketManager.disconnect(mySid)
         } catch (e: Exception) {
             Log.e("REMOTE CONTROL", "Socket disconnect error: $e")
-        }
-        try {
-            socket?.close()
-
-        } catch (e: Exception) {
-            Log.e("REMOTE CONTROL", "Socket close error: $e")
         }
 
         super.onDestroy()
     }
+
 
 }

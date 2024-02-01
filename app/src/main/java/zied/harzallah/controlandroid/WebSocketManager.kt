@@ -1,23 +1,20 @@
 package zied.harzallah.controlandroid
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.util.Base64
 import android.util.Log
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
-import java.io.ByteArrayOutputStream
+import org.json.JSONObject
 
 
-class WebSocketManager(private val context: Context) {
+class WebSocketManager(private var context: Context) {
 
     private var mSocket: Socket? = null
     private var tokenManager = SharedPreferencesHelper()
 
-
     init {
-        var jwtToken = tokenManager.getToken(context)
+        val jwtToken = tokenManager.getToken(context)
         try {
             val options = IO.Options.builder().setExtraHeaders(
                 mapOf(
@@ -25,12 +22,11 @@ class WebSocketManager(private val context: Context) {
                 )
             ).setTransports(arrayOf("websocket")).build()
 
-            mSocket = IO.socket("ws://192.168.1.13:5000/", options)
+            mSocket = IO.socket("wss://testiingdeploy.onrender.com/", options)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
-
 
     fun connect() {
         try {
@@ -41,28 +37,23 @@ class WebSocketManager(private val context: Context) {
         } catch (e: Exception) {
             println("exception")
         }
-
-
     }
 
-    fun disconnect() {
+    fun disconnect(target: String) {
         try {
+            if (target.isNotEmpty()) mSocket?.emit(
+                "message", JSONObject(
+                    mapOf(
+                        "target" to target, "data" to "disconnected",
+                    )
+                ).toString()
+
+            )
             mSocket?.disconnect()
             mSocket?.close()
-
-
         } catch (e: Exception) {
             Log.e("REMOTE CONTROL", " exception on disconnect $e")
         }
-    }
-
-    fun sendImage(bitmap: Bitmap) {
-        val baos = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos)
-        val imageBytes = baos.toByteArray()
-        val base64Image = Base64.encodeToString(imageBytes, Base64.DEFAULT)
-
-        emit("image_event", base64Image)
     }
 
     fun emit(event: String, arg: Any) {

@@ -9,6 +9,7 @@ import android.widget.Button
 import androidx.activity.ComponentActivity
 
 
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +32,8 @@ class MainActivity : ComponentActivity() {
 
         val button1: Button = findViewById(R.id.button1)
         val button2: Button = findViewById(R.id.button2)
+        val button3: Button = findViewById(R.id.button3)
+
 
         button1.setOnClickListener {
             val serviceIntent = Intent(this, RunningService::class.java)
@@ -41,6 +44,36 @@ class MainActivity : ComponentActivity() {
             val serviceIntent = Intent(this, RunningService::class.java)
             serviceIntent.action = RunningService.ACTION_STOP
             this.startService(serviceIntent)
+        }
+
+        button3.setOnClickListener {
+
+                var cmd = arrayOf(
+                    "su", "-c", "input motionevent DOWN 500 600"
+                )
+                var p = Runtime.getRuntime().exec(cmd)
+                p.waitFor()
+                p.outputStream.flush()
+                cmd = arrayOf(
+                    "su", "-c", "input motionevent MOVE 800 900"
+                )
+                p = Runtime.getRuntime().exec(cmd)
+                p.waitFor()
+                p.outputStream.flush()
+                cmd = arrayOf(
+                    "su", "-c", "input motionevent MOVE 100 200"
+                )
+                p = Runtime.getRuntime().exec(cmd)
+                p.waitFor()
+                p.outputStream.flush()
+                cmd = arrayOf(
+                    "su", "-c", "input motionevent UP 200 240"
+                )
+                p = Runtime.getRuntime().exec(cmd)
+                p.waitFor()
+                p.outputStream.flush()
+
+
         }
 
     }

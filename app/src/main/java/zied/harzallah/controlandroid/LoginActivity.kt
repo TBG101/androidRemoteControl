@@ -29,7 +29,6 @@ class LoginActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContentView(R.layout.activity_login)
 
 
@@ -38,17 +37,18 @@ class LoginActivity : ComponentActivity() {
         loginButton = findViewById(R.id.buttonLogin)
 
         loginButton.setOnClickListener {
-            val url = "http://192.168.1.13:5000/login"
+
             val jsonData =
                 "{ \"email\": \"${email.text}\", \"password\": \"${passwordEditText.text}\" }"
             if (email.text.isEmpty() && passwordEditText.text.isEmpty()) {
-                Toast.makeText(this, "email or password is empty", Toast.LENGTH_SHORT)
+                Toast.makeText(this, "email or password is empty", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
 
             lifecycleScope.launch {
                 try {
+                    val url = "https://testiingdeploy.onrender.com/login"
                     val result = makePostRequest(url, jsonData)
                     if (result[1] == "200") {
                         val json: Map<String, JsonElement> =
@@ -63,18 +63,14 @@ class LoginActivity : ComponentActivity() {
                         finish()
                     } else {
                         println("CODE 400")
-
                     }
-
-
                     // Handle the response here
                 } catch (e: Exception) {
                     // Handle exceptions or errors
-                    println("error connecting to server")
+                    println("error connecting to server $e")
                 }
             }
         }
-
 
         lifecycleScope.launch {
             checkForToken()
@@ -91,13 +87,11 @@ class LoginActivity : ComponentActivity() {
                 connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8")
                 connection.doOutput = true
 
-                // Write JSON data to the request body
                 val outputStream: OutputStream = connection.outputStream
                 outputStream.write(jsonData.toByteArray())
 
                 val responseCode = connection.responseCode
 
-                // Get response from the server
                 val reader = BufferedReader(InputStreamReader(connection.inputStream))
                 val response = StringBuilder()
 
@@ -121,36 +115,36 @@ class LoginActivity : ComponentActivity() {
         if (t.isNullOrEmpty()) return
 
         println(t)
-        val url = "http://192.168.1.13:5000/protected"
 
 
         val r = withContext(Dispatchers.IO) {
-            val url = URL(url)
+            val link = "https://testiingdeploy.onrender.com/protected"
+            val url = URL(link)
             val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET";
+            connection.requestMethod = "GET"
             connection.setRequestProperty(
-                "Authorization", "Bearer ${t!!.removeSurrounding("\"")}"
+                "Authorization", "Bearer ${t.removeSurrounding("\"")}"
             )
             connection.setRequestProperty(
                 "Content-Type", "application/json"
             )
 
             try {
-
                 val responseCode = connection.responseCode
-
                 if (responseCode == 200) {
-
+                    connection.disconnect()
                     return@withContext responseCode
                 } else {
                     // Handle other HTTP response codes as needed
                     print("different than 200")
+                    connection.disconnect()
                     return@withContext null
                 }
-            } finally {
+            } catch (e: Exception) {
+                Log.e("REMOTE CONTROL", "Exception on checking token $e")
                 connection.disconnect()
             }
-
+            return@withContext null
         }
 
         if (r != null) {
@@ -160,8 +154,7 @@ class LoginActivity : ComponentActivity() {
             finish()
 
         } else {
-            // Handle the case where there was an error or the response was null
-            println("Error or null response,$r")
+            println("Error or null response")
         }
     }
 }
